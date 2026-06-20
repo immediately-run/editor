@@ -28,11 +28,18 @@ export const DEFAULT_WRITE_DEBOUNCE_MS = 150;
 export function debounce<A extends unknown[]>(
   fn: (...args: A) => void,
   waitMs: number = DEFAULT_WRITE_DEBOUNCE_MS,
-  // Injectable timers so tests don't depend on wall-clock.
+  // Injectable timers so tests don't depend on wall-clock. The defaults wrap the
+  // globals in arrows: passing bare `setTimeout`/`clearTimeout` and calling them
+  // as `timers.set(...)` would invoke them with `this === timers`, which throws
+  // "Illegal invocation" in a browser (the WindowTimers methods require `this`
+  // to be the global). The wrappers preserve the correct receiver.
   timers: {
     set: (cb: () => void, ms: number) => number;
     clear: (id: number) => void;
-  } = { set: setTimeout as never, clear: clearTimeout as never },
+  } = {
+    set: (cb, ms) => setTimeout(cb, ms) as unknown as number,
+    clear: (id) => clearTimeout(id),
+  },
 ): Debounced<A> {
   let timer: number | null = null;
   let lastArgs: A | null = null;

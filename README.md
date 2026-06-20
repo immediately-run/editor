@@ -78,6 +78,25 @@ npm test       # vitest
 npm run build  # tsc -b && vite build
 ```
 
+### Verify standalone (the harness)
+
+Because the app is not yet bound to `panel.editor` (Phase 05), there is no live host
+to drive it. `npm run dev:harness` runs it against a dev-only mock
+(`src/dev/sdkMock.ts`, aliased in by `vite.harness.config.ts`) that supplies what the
+host normally would — the editor-session channel (active file + open tabs) and an
+in-memory rw working-tree port with seed files. Open `/harness.html` and exercise the
+real surface: typing → debounced port write, tab switch/close intents, theme, and the
+§6 conflict / §12.4 vanished states. The page exposes `window.__editorHarness` so a
+scripted browser session can drive scenarios:
+
+```js
+__editorHarness.externalWrite('/app/src/App.tsx', '…')  // dirty buffer → §6 conflict
+__editorHarness.externalDelete('/app/src/App.tsx')       // → §12.4 vanished placeholder
+__editorHarness.setTheme('light'); __editorHarness.activate('/src/main.tsx')
+```
+
+The harness is dev-only — production builds use the real SDK (`vite.config.ts`).
+
 ## Forking
 
 Fork it, edit it, run it — it is an ordinary immediately.run app. A fork inherits a

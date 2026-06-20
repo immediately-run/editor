@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:harness": "vite --config vite.harness.config.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
