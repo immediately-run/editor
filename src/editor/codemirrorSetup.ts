@@ -13,9 +13,10 @@ import {
   EditorView,
 } from '@codemirror/view';
 import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { bracketMatching, indentOnInput, syntaxHighlighting } from '@codemirror/language';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { lintGutter } from '@codemirror/lint';
+import { editorHighlightStyle } from './highlight';
 
 export const baseExtensions: Extension[] = [
   lineNumbers(),
@@ -26,7 +27,7 @@ export const baseExtensions: Extension[] = [
   indentOnInput(),
   bracketMatching(),
   closeBrackets(),
-  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  syntaxHighlighting(editorHighlightStyle, { fallback: true }),
   lintGutter(),
   EditorView.lineWrapping,
   keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),

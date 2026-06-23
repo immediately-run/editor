@@ -32,11 +32,20 @@ body,
   --danger: #f0795f;
   --danger-bg: #3a2420;
 
-  --cm-fg: #e6e6ea;
+  --cm-fg: #d9d7e0;
   --cm-caret: #6ea8fe;
   --cm-gutter: #6b6b78;
   --cm-active-line: rgba(255, 255, 255, 0.04);
   --cm-selection: rgba(110, 168, 254, 0.25);
+
+  /* Syntax tokens — design-system editor palette (Monokai-Pro-derived,
+     keyed to the brand pink/violet). See src/editor/highlight.ts. */
+  --cm-t-keyword: #ff6188; /* keywords, tags */
+  --cm-t-attribute: #a9dc76; /* attributes, functions, properties */
+  --cm-t-string: #ffd866; /* strings */
+  --cm-t-constant: #ab9df2; /* numbers, constants, booleans */
+  --cm-t-punctuation: #939293; /* punctuation, operators, brackets */
+  --cm-t-comment: #797687; /* comments, doctype/meta */
 }
 
 /* Light */
@@ -51,9 +60,19 @@ body,
   --danger: #c0392b;
   --danger-bg: #fdecea;
 
-  --cm-fg: #1c1c20;
+  --cm-fg: #1c1726; /* plain identifiers / editor text */
   --cm-caret: #2563eb;
   --cm-gutter: #a0a0ac;
   --cm-active-line: rgba(0, 0, 0, 0.03);
   --cm-selection: rgba(37, 99, 235, 0.18);
+
+  /* Syntax tokens — light values from the "Editor Color Proposal - Light"
+     bundle: same role hues as the dark tokens, darkened to read on a white
+     panel (keywords/tags keyed to the light-mode magenta, constants to violet). */
+  --cm-t-keyword: #c43d96; /* keywords, tags */
+  --cm-t-attribute: #5e8c1f; /* attributes, functions, properties */
+  --cm-t-string: #9a6b00; /* strings */
+  --cm-t-constant: #8645d6; /* numbers, constants, booleans */
+  --cm-t-punctuation: #6b6577; /* punctuation, operators, brackets */
+  --cm-t-comment: #938aa6; /* comments, doctype/meta */
 }
