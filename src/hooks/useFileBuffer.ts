@@ -14,13 +14,13 @@
 //
 // External-change source: the Phase-02 `onFsChange` channel is not built yet
 // (EDITOR_AS_APP_STATUS), so we detect external writes by re-reading the active
-// file on a low-frequency poll and on tab focus. The detection is origin-safe by
-// construction — our own writes advance the buffer `baseline`, so the poll only
-// ever sees a *foreign* write as a divergence. When `onFsChange` lands, swap the
-// poll for the channel subscription; the buffer transitions are unchanged.
+// file when the host's §4.2 `onFsChange` channel reports it changed. The detection
+// is origin-safe by construction — our own writes advance the buffer `baseline`,
+// so the §6 machine treats an echoed change (disk == buffer) as a no-op, never a
+// foreign divergence.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useMounts } from '@immediately-run/sdk';
+import { useMounts, onFsChange } from '@immediately-run/sdk';
 import {
   openBuffer,
   applyEdit,
@@ -35,7 +35,10 @@ import {
 import { debounce, type Debounced } from '../core/debounce';
 import { WorkingTree, isWritable } from '../fs/workingTree';
 
-const POLL_MS = 1500;
+/** Compare two repo-relative paths tolerant of a leading-slash mismatch (the host
+ *  pushes `/src/App.tsx`; the active file is also leading-slash, but be defensive). */
+const samePath = (a: string, b: string): boolean =>
+  a.replace(/^\/+/, '') === b.replace(/^\/+/, '');
 
 export interface UseFileBuffer {
   buffer: FileBuffer | null;
@@ -131,14 +134,22 @@ export function useFileBuffer(activeFile: string | null): UseFileBuffer {
     };
   }, [activeFile, setBuffer]);
 
-  // Poll the active file for external changes (stand-in for the onFsChange
-  // channel). Re-reads; a divergence from the baseline folds through the buffer
-  // machine (clean → silent adopt, dirty → blocking conflict); a read failure on
-  // a previously-present file means it vanished (§12.4).
+  // React to external changes via the §4.2 `onFsChange` channel: when the active
+  // file appears in a change batch, re-read it and fold the result through the
+  // buffer machine (clean → silent adopt, dirty → blocking conflict; a read failure
+  // on a previously-present file means it vanished, §12.4). This replaces the
+  // earlier re-read poll — the host now pushes the changed paths, so we re-read
+  // exactly the active file exactly when it changes, not on a timer.
+  //
+  // Origin-exclusion: the host fans this out to ALL working-tree consumers
+  // INCLUDING us, so a batch can be the echo of our OWN debounced write. We don't
+  // filter by origin host-side; instead `applyExternalChange` is a no-op when the
+  // disk bytes equal our buffer (the §6 machine re-baselines without a conflict),
+  // so an echo never surfaces as a false external change.
   useEffect(() => {
     if (!activeFile) return;
     let stopped = false;
-    const tick = async () => {
+    const reread = async () => {
       const cur = bufferRef.current;
       if (!cur || cur.path !== activeFile) return;
       const tree = WorkingTree.current();
@@ -155,13 +166,15 @@ export function useFileBuffer(activeFile: string | null): UseFileBuffer {
         }
       }
     };
-    const id = window.setInterval(tick, POLL_MS);
-    const onFocus = () => void tick();
-    window.addEventListener('focus', onFocus);
+    const unsubscribe = onFsChange((change) => {
+      // epoch 0 is the empty initial (fires immediately on subscribe) — nothing to
+      // re-read. Otherwise re-read iff the active file is in this batch.
+      if (change.epoch === 0) return;
+      if (change.paths.some((p) => samePath(p, activeFile))) void reread();
+    });
     return () => {
       stopped = true;
-      window.clearInterval(id);
-      window.removeEventListener('focus', onFocus);
+      unsubscribe();
     };
   }, [activeFile, setBuffer]);
 
