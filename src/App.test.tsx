@@ -24,6 +24,8 @@ vi.mock('@immediately-run/sdk', () => ({
   getAppMountPath: () => '/app',
   setActiveFile: vi.fn(() => Promise.resolve()),
   closeFile: vi.fn(() => Promise.resolve()),
+  // The fs-change subscription returns an unsubscribe; no events in these tests.
+  onFsChange: vi.fn(() => () => {}),
 }));
 
 // --- working-tree port mock --------------------------------------------------
