@@ -30,7 +30,19 @@ describe('resolveWorkingTreeRoot', () => {
     expect(resolveWorkingTreeRoot(mounts, '/app')).toBe('/mnt/wt');
   });
 
-  it('falls back to the app mount path when there is no rw mount', () => {
+  it('selects the worktree port by identity even when it is read-only', () => {
+    // Regression: a local/zip/space stage app exposes its worktree `ro` (the source
+    // mode clamps the binding's `rw`), while the editor's OWN repo is dual-mounted
+    // `rw` at `/mnt/{hash}`. Selecting by `mode === 'rw'` skipped the `ro` worktree
+    // and fell back to the app's own repo, so the editor read/edited ITSELF.
+    const mounts: SandboxMount[] = [
+      { path: '/mnt/own', type: 'repo', mode: 'rw' },
+      { path: '/mnt/wt', type: 'worktree', mode: 'ro' },
+    ];
+    expect(resolveWorkingTreeRoot(mounts, '/mnt/own')).toBe('/mnt/wt');
+  });
+
+  it('falls back to the app mount path when there is no worktree or rw mount', () => {
     expect(resolveWorkingTreeRoot([], '/app')).toBe('/app');
     const ro: SandboxMount[] = [{ path: '/spaces/x', type: 'firestore', mode: 'ro' }];
     expect(resolveWorkingTreeRoot(ro, '/app')).toBe('/app');

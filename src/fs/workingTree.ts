@@ -19,13 +19,22 @@ export function joinMount(root: string, repoRelative: string): string {
 }
 
 /**
- * The absolute root the editor reads/writes through. Prefers an explicit rw
- * working-tree mount (the `exposesWorkingTree:'rw'` port, mode `'rw'`); falls back
- * to the app's own repo mount path. The repo mount has no `mode` and is treated
- * as writable (it is the user's own working copy).
+ * The absolute root the editor reads/writes through. Selects the working tree by
+ * IDENTITY — the §3.5 `worktree` port the host publishes (`type: 'worktree'`,
+ * `exposesWorkingTree`) — regardless of `ro`/`rw`. A read-only source (local-dev,
+ * zip cache, read-only space, anonymous GitHub viewer) is still THE tree to read;
+ * writability gates SAVE only (see {@link isWritable}). Falls back to any rw mount,
+ * then the app's own repo mount path.
  */
 export function resolveWorkingTreeRoot(mounts: SandboxMount[], appMountPath: string): string {
-  // A whole-mount rw grant rooted at the repo — the Phase-01 working-tree port.
+  // Prefer the explicit working-tree port, ro or rw. Selecting by `mode === 'rw'`
+  // alone skipped a `ro` worktree (the editor `exposesWorkingTree:'rw'`, but the
+  // SOURCE mode clamps it to `ro` for local/zip/space) and fell back to
+  // `appMountPath` — the editor's OWN repo, dual-mounted rw at `/mnt/{hash}` — so
+  // the editor silently read and edited ITSELF instead of the session's tree.
+  const worktree = mounts.find((m) => m.type === 'worktree');
+  if (worktree) return worktree.path;
+  // Legacy fallback: any rw mount rooted at the repo, then the app's own mount.
   const rw = mounts.find((m) => m.mode === 'rw');
   if (rw) return rw.path;
   return appMountPath;
