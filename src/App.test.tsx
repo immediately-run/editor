@@ -1,7 +1,7 @@
 // React-surface smoke tests for the editor app. The SDK channels and the
-// working-tree port are mocked so the readiness states (§12.7) and the tab strip
-// render without a live sandbox. The decision logic itself is covered by the pure
-// core suites (buffer / readiness / diagnostics / debounce).
+// working-tree port are mocked so the readiness states (§12.7) render without a
+// live sandbox. The decision logic itself is covered by the pure core suites
+// (buffer / readiness / diagnostics / debounce).
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -69,13 +69,13 @@ describe('App readiness states', () => {
     expect(screen.getByText(/no file open/i)).toBeInTheDocument();
   });
 
-  it('renders the open tabs from the session channel', () => {
+  it('does not render a tab strip for the open files', () => {
     fs.available = true;
     editorContext.openFiles = ['/src/App.tsx', '/src/main.tsx'];
     editorContext.activeFile = '/src/App.tsx';
     fs.files.set('/app/src/App.tsx', 'export default 1;');
     render(<App />);
-    expect(screen.getByText('App.tsx')).toBeInTheDocument();
-    expect(screen.getByText('main.tsx')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByText('main.tsx')).not.toBeInTheDocument();
   });
 });
