@@ -1,18 +1,15 @@
 // The editor app — raw CodeMirror over SDK channels, no same-origin assumptions
-// (EDITOR_AS_APP_SPEC, plan Phase 04). It reads the editor session (active file +
-// open tabs) and host theme/form-factor from channels, edits the file through the
-// rw working-tree port, and drives tabs through the session intents. Behind the
-// kernel kill-switch it is not yet bound to `panel.editor` (Phase 05); this is
-// parity-in-isolation.
+// (EDITOR_AS_APP_SPEC, plan Phase 04). It reads the editor session (active file)
+// and host theme/form-factor from channels and edits the file through the rw
+// working-tree port. No tab strip is rendered — the host owns file switching.
+// Behind the kernel kill-switch it is not yet bound to `panel.editor` (Phase 05);
+// this is parity-in-isolation.
 
-import { useMemo } from 'react';
 import { useEditorContext, useHostTheme, useFormFactor } from '@immediately-run/sdk';
 import { useFileBuffer } from './hooks/useFileBuffer';
 import { useBuildErrors } from './hooks/useBuildErrors';
 import { resolvePhase } from './core/readiness';
-import { isDirty } from './core/buffer';
 import { CodeMirrorView } from './editor/CodeMirrorView';
-import { TabStrip } from './chrome/TabStrip';
 import { ConflictBar } from './chrome/ConflictBar';
 import { Placeholder } from './chrome/Placeholder';
 import { isRewrittenPath } from './core/rewrittenPaths';
@@ -20,7 +17,7 @@ import './index.css';
 import './App.css';
 
 export default function App() {
-  const { activeFile, openFiles, dirtyPaths } = useEditorContext();
+  const { activeFile } = useEditorContext();
   const theme = useHostTheme();
   const formFactor = useFormFactor();
   const buildErrors = useBuildErrors();
@@ -43,14 +40,6 @@ export default function App() {
   // is a non-writable mount (an `ro` view / anonymous viewer).
   const readOnly = !writable || (activeFile != null && isRewrittenPath(activeFile));
 
-  // Tab dirty dots: the host's dirty set plus our live local-buffer state for the
-  // active file (the host learns of our write only after it lands).
-  const dirtySet = useMemo(() => {
-    const s = new Set(dirtyPaths);
-    if (buffer && isDirty(buffer)) s.add(buffer.path);
-    return [...s];
-  }, [dirtyPaths, buffer]);
-
   const conflict = buffer?.conflict ?? null;
   const errors = activeFile ? buildErrors : [];
 
@@ -61,8 +50,6 @@ export default function App() {
       data-form-factor={formFactor.class}
       data-orientation={formFactor.orientation}
     >
-      <TabStrip openFiles={openFiles} activeFile={activeFile} dirtyPaths={dirtySet} />
-
       {conflict && buffer && (
         <ConflictBar
           path={buffer.path}

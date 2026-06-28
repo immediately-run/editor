@@ -35,9 +35,9 @@ hosts `SandpackProvider`; it edits a kernel-owned document over the SDK.
 - **Active-file-vanished (§12.4).** A file deleted/renamed under the open buffer shows
   a "this file was removed" placeholder and is **never written back** (no
   resurrection).
-- **Tabs + intents.** The open-tab set renders from the session channel; clicks call
-  `setActiveFile` / `closeFile` (the `editor:document` capability). The app holds no
-  local tab state — it renders the echoed channel (single source of truth).
+- **No tab strip.** The active file is driven entirely by the session channel; the
+  app renders only that file and shows no tab bar. The host owns file switching, so
+  this surface holds no local tab state.
 - **Diagnostics, theme, form-factor** ride their channels (`useDiagnostics`,
   `useHostTheme`, `useFormFactor`).
 
