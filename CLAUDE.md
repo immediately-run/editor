@@ -30,5 +30,7 @@ in the `docs` repo are the source of truth.
 
 ## Reusing across repos
 
-`src/fs/mountFs.ts` is adapted from the file-explorer app — keep the two in sync if the
-sandbox fs accessor changes.
+`src/fs/mountFs.ts` keeps only the editor's domain helpers (UTF-8 read/write/exists); the
+sandbox-fs **resolution** lives in `@immediately-run/sdk/fs` (`sandboxFs`/`fsAvailable`),
+shared with the file-explorer app — so there is nothing to "keep in sync" by hand anymore.
+If the sandbox fs accessor changes, it changes once, in the SDK.

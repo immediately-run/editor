@@ -7,6 +7,13 @@ vi.mock('@immediately-run/sdk', () => ({
   getMounts: () => [],
   getAppMountPath: () => '/app',
 }));
+// mountFs now reaches the sandbox fs through the SDK's `@immediately-run/sdk/fs`
+// subpath; mock it too (same reason — keep its extensionless ESM out of vitest's
+// strict resolver). The functions under test never touch it.
+vi.mock('@immediately-run/sdk/fs', () => ({
+  sandboxFs: () => null,
+  fsAvailable: () => false,
+}));
 
 import { joinMount, resolveWorkingTreeRoot, isWritable } from './workingTree';
 
