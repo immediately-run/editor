@@ -74,6 +74,28 @@ export function applyExternalChange(b: FileBuffer, theirs: string): FileBuffer {
   return { path: b.path, baseline: theirs, buffer: theirs, conflict: null, vanished: false };
 }
 
+/**
+ * The working tree now holds bytes **this app wrote** — the echo of our own save
+ * coming back on the fs-change stream. Re-baseline onto them; never a conflict.
+ *
+ * This is the editor's origin exclusion, and it is deliberately identity-based
+ * ("are these the bytes I sent?") rather than the equality it used to rely on
+ * ("does disk match my buffer?"). Buffer equality is not a sound test for "mine":
+ * the user keeps typing while the write is in flight, so by the time the echo
+ * lands the buffer has legitimately moved on and `applyExternalChange` sees a
+ * divergence that has no external writer behind it — a blocking conflict raised
+ * against nobody, on the second keystroke.
+ *
+ * The buffer is untouched, so if the user has typed on it stays dirty against the
+ * new baseline and the next debounced write saves the rest.
+ */
+export function applyOwnWriteEcho(b: FileBuffer, ours: string): FileBuffer {
+  // A vanished file is not resurrected by its own stale echo (§12.4), and a
+  // conflict already raised is the user's to resolve — neither is ours to clear.
+  if (b.vanished || b.conflict) return b;
+  return { ...b, baseline: ours };
+}
+
 /** The active/open file was deleted or renamed externally (spec §12.4). Mark it
  *  vanished; the app shows a placeholder and must NOT write the path back (which
  *  would resurrect the file). The user's buffer is preserved in case they want to
