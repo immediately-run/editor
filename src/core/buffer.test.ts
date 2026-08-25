@@ -5,6 +5,7 @@ import {
   canSave,
   applyEdit,
   applyExternalChange,
+  applyOwnWriteEcho,
   applyExternalDelete,
   resolveKeepMine,
   resolveTakeTheirs,
@@ -112,6 +113,44 @@ describe('buffer state machine', () => {
       b = applyExternalChange(b, 'recreated');
       expect(b.vanished).toBe(false);
       expect(b.buffer).toBe('recreated');
+    });
+  });
+
+
+  describe('own-write echo (origin exclusion)', () => {
+    it('re-baselines onto our own bytes while the user keeps typing — no conflict', () => {
+      // The regression: the user types 'x', the debounced write of "basex" goes out,
+      // and 'y' lands before the echo comes back. `applyExternalChange` would see
+      // theirs("basex") !== buffer("basexy") and raise a BLOCKING conflict against
+      // a writer that does not exist.
+      let b = applyEdit(openBuffer('/a', 'base'), 'basex');
+      b = applyEdit(b, 'basexy');
+      b = applyOwnWriteEcho(b, 'basex');
+
+      expect(b.conflict).toBeNull();
+      expect(b.buffer).toBe('basexy'); // keystrokes untouched
+      expect(b.baseline).toBe('basex'); // …and still dirty against what is on disk
+      expect(isDirty(b)).toBe(true);
+      expect(canSave(b)).toBe(true);
+    });
+
+    it('the settled case is clean', () => {
+      let b = applyEdit(openBuffer('/a', 'base'), 'mine');
+      b = applyOwnWriteEcho(b, 'mine');
+      expect(isDirty(b)).toBe(false);
+      expect(b.conflict).toBeNull();
+    });
+
+    it('never resurrects a vanished file', () => {
+      const gone = applyExternalDelete(applyEdit(openBuffer('/a', 'base'), 'mine'));
+      expect(applyOwnWriteEcho(gone, 'mine')).toEqual(gone);
+    });
+
+    it('never clears a conflict the user still owes an answer to', () => {
+      let b = applyEdit(openBuffer('/a', 'base'), 'mine');
+      b = applyExternalChange(b, 'theirs');
+      expect(b.conflict).toEqual({ theirs: 'theirs' });
+      expect(applyOwnWriteEcho(b, 'mine')).toEqual(b);
     });
   });
 
