@@ -24,7 +24,20 @@ vi.mock("@immediately-run/sdk/sandboxUtils", () => ({
     const set = rawListeners.get(type) ?? new Set<(m: unknown) => void>();
     set.add(handler);
     rawListeners.set(type, set);
+    readyOrder.push(`subscribe:${type}`);
     return () => set.delete(handler);
+  },
+}));
+
+// R3-392 — the app's readiness report is the host's gate for releasing a caret
+// request to a frame that was still booting when the user clicked. The real module
+// imports the real `sandboxUtils` (same extensionless specifier), so mock it, and
+// record its order relative to the listener subscription: "ready" must mean
+// "listening", or the released one-shot is lost exactly as before.
+const readyOrder: string[] = [];
+vi.mock("@immediately-run/sdk/ready", () => ({
+  reportReady: () => {
+    readyOrder.push("ready");
   },
 }));
 
@@ -77,6 +90,20 @@ beforeEach(() => {
   editorContext.dirtyPaths = [];
   fs.available = false;
   fs.files.clear();
+});
+
+describe("R3-392 — readiness report gates caret delivery", () => {
+  it("reports ready to the host only AFTER the caret listener is subscribed", () => {
+    readyOrder.length = 0;
+    fs.available = true;
+    editorContext.activeFile = "/src/App.tsx";
+    render(<App />);
+    expect(readyOrder).toContain("ready");
+    expect(readyOrder.indexOf("subscribe:editor-selection")).toBeGreaterThanOrEqual(0);
+    expect(readyOrder.indexOf("subscribe:editor-selection")).toBeLessThan(
+      readyOrder.indexOf("ready"),
+    );
+  });
 });
 
 describe("App readiness states", () => {

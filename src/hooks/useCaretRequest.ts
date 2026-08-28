@@ -11,6 +11,7 @@
 // floor: the message is not part of the SDK's surface.
 import { useEffect, useState } from "react";
 import { addListener } from "@immediately-run/sdk/sandboxUtils";
+import { reportReady } from "@immediately-run/sdk/ready";
 
 export interface CaretRequest {
   path: string;
@@ -52,6 +53,12 @@ export function useCaretRequest(): CaretRequest | null {
           if (parsed) setRequest(parsed);
         },
       );
+      // The host holds a caret request issued while this frame was still booting and
+      // releases it on the app's readiness report — `ir.interactive` fires at the SDK
+      // root's first commit, well before this listener exists, and a one-shot sent
+      // then is simply lost (TOOLS_ACTIVITY_SPEC §8.2). Report only once the
+      // listener is live, so "ready" means "listening".
+      reportReady();
     } catch {
       // No host transport — a standalone `vite dev` render. The editor still works;
       // nothing sends caret requests.

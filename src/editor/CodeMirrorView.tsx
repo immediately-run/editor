@@ -58,6 +58,8 @@ export function CodeMirrorView({
 }: CodeMirrorViewProps) {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
+  // R3-388 — the caret request (nonce) this component has applied; see below.
+  const lastAppliedNonce = useRef<number | null>(null);
   const onChangeRef = useRef(onChange);
   // Keep the latest onChange without re-creating the view (updated post-render).
   useEffect(() => {
@@ -87,6 +89,11 @@ export function CodeMirrorView({
     });
     const v = new EditorView({ state, parent: host.current });
     view.current = v;
+    // A fresh view has applied nothing. The nonce ledger is a ref and outlives the
+    // view under a StrictMode-style effect double-run (mount → cleanup → mount), so
+    // without this reset the SECOND view — the one that stays on screen — would skip
+    // a request the first, already-destroyed view had consumed.
+    lastAppliedNonce.current = null;
     return () => {
       v.destroy();
       view.current = null;
@@ -133,7 +140,6 @@ export function CodeMirrorView({
   // request routinely arrives BEFORE this view has the new document. Reacting only to
   // the selection would land the caret in the outgoing file, or nowhere. Re-running on
   // `doc` lets the same nonce apply once the right text is in the view.
-  const lastAppliedNonce = useRef<number | null>(null);
   useEffect(() => {
     const v = view.current;
     if (!v || !selection) return;
