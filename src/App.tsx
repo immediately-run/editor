@@ -5,22 +5,29 @@
 // Behind the kernel kill-switch it is not yet bound to `panel.editor` (Phase 05);
 // this is parity-in-isolation.
 
-import { useEditorContext, useHostTheme, useFormFactor } from '@immediately-run/sdk';
-import { useFileBuffer } from './hooks/useFileBuffer';
-import { useBuildErrors } from './hooks/useBuildErrors';
-import { resolvePhase } from './core/readiness';
-import { CodeMirrorView } from './editor/CodeMirrorView';
-import { ConflictBar } from './chrome/ConflictBar';
-import { Placeholder } from './chrome/Placeholder';
-import { isRewrittenPath } from './core/rewrittenPaths';
-import './index.css';
-import './App.css';
+import {
+  useEditorContext,
+  useHostTheme,
+  useFormFactor,
+} from "@immediately-run/sdk";
+import { useFileBuffer } from "./hooks/useFileBuffer";
+import { useBuildErrors } from "./hooks/useBuildErrors";
+import { useCaretRequest } from "./hooks/useCaretRequest";
+import { resolvePhase } from "./core/readiness";
+import { CodeMirrorView } from "./editor/CodeMirrorView";
+import { ConflictBar } from "./chrome/ConflictBar";
+import { Placeholder } from "./chrome/Placeholder";
+import { isRewrittenPath } from "./core/rewrittenPaths";
+import "./index.css";
+import "./App.css";
 
 export default function App() {
   const { activeFile } = useEditorContext();
   const theme = useHostTheme();
   const formFactor = useFormFactor();
   const buildErrors = useBuildErrors();
+  // R3-388 — a host request to land the caret on a line (a problems-list click).
+  const caret = useCaretRequest();
 
   const {
     buffer,
@@ -38,7 +45,8 @@ export default function App() {
   // A file Sandpack rewrites on every mount (e.g. package.json) is read-only — a
   // user edit would be accepted then silently discarded (native CP-3 parity). So
   // is a non-writable mount (an `ro` view / anonymous viewer).
-  const readOnly = !writable || (activeFile != null && isRewrittenPath(activeFile));
+  const readOnly =
+    !writable || (activeFile != null && isRewrittenPath(activeFile));
 
   const conflict = buffer?.conflict ?? null;
   const errors = activeFile ? buildErrors : [];
@@ -60,9 +68,11 @@ export default function App() {
         />
       )}
 
-      {readOnly && phase === 'ready' && !buffer?.vanished && (
+      {readOnly && phase === "ready" && !buffer?.vanished && (
         <div className="ed-readonly-note" role="note">
-          {writable ? 'Read-only — this file is regenerated on each run.' : 'Read-only.'}
+          {writable
+            ? "Read-only — this file is regenerated on each run."
+            : "Read-only."}
         </div>
       )}
       {saveError && (
@@ -72,21 +82,22 @@ export default function App() {
       )}
 
       <div className="ed-body">
-        {phase === 'awaiting-port' && <Placeholder kind="awaiting-port" />}
-        {phase === 'no-active-file' && <Placeholder kind="no-active-file" />}
-        {phase === 'ready' && buffer?.vanished && (
+        {phase === "awaiting-port" && <Placeholder kind="awaiting-port" />}
+        {phase === "no-active-file" && <Placeholder kind="no-active-file" />}
+        {phase === "ready" && buffer?.vanished && (
           <Placeholder kind="vanished" detail={buffer.path} />
         )}
-        {phase === 'ready' && !buffer && loadError && (
+        {phase === "ready" && !buffer && loadError && (
           <Placeholder kind="error" detail={loadError} />
         )}
-        {phase === 'ready' && buffer && !buffer.vanished && (
+        {phase === "ready" && buffer && !buffer.vanished && (
           <CodeMirrorView
             path={buffer.path}
             doc={buffer.buffer}
             readOnly={readOnly}
             theme={theme}
             errors={errors}
+            selection={caret}
             onChange={setText}
           />
         )}

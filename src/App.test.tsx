@@ -3,8 +3,8 @@
 // live sandbox. The decision logic itself is covered by the pure core suites
 // (buffer / readiness / diagnostics / debounce).
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
 
 // --- SDK mock ---------------------------------------------------------------
 const editorContext = {
@@ -14,14 +14,37 @@ const editorContext = {
 };
 const mounts: unknown[] = [];
 
-vi.mock('@immediately-run/sdk', () => ({
+// R3-388 — the subpath the caret listener rides. The REAL `sandboxUtils` cannot load
+// under vitest (tsup emits extensionless specifiers), which the file explorer's suite
+// records for the same import. Mocking it also gives this suite a controllable
+// host→app channel.
+const rawListeners = new Map<string, Set<(m: unknown) => void>>();
+vi.mock("@immediately-run/sdk/sandboxUtils", () => ({
+  addListener: (type: string, handler: (m: unknown) => void) => {
+    const set = rawListeners.get(type) ?? new Set<(m: unknown) => void>();
+    set.add(handler);
+    rawListeners.set(type, set);
+    return () => set.delete(handler);
+  },
+}));
+
+vi.mock("@immediately-run/sdk", () => ({
   useEditorContext: () => editorContext,
-  useHostTheme: () => 'dark',
-  useFormFactor: () => ({ class: 'desktop', orientation: 'landscape', width: 1280, height: 800 }),
-  useDiagnostics: () => ({ buildErrors: [], consoleEntries: [], provenance: null }),
+  useHostTheme: () => "dark",
+  useFormFactor: () => ({
+    class: "desktop",
+    orientation: "landscape",
+    width: 1280,
+    height: 800,
+  }),
+  useDiagnostics: () => ({
+    buildErrors: [],
+    consoleEntries: [],
+    provenance: null,
+  }),
   useMounts: () => mounts,
   getMounts: () => mounts,
-  getAppMountPath: () => '/app',
+  getAppMountPath: () => "/app",
   setActiveFile: vi.fn(() => Promise.resolve()),
   closeFile: vi.fn(() => Promise.resolve()),
   // The fs-change subscription returns an unsubscribe; no events in these tests.
@@ -33,10 +56,12 @@ const fs = {
   available: false,
   files: new Map<string, string>(),
 };
-vi.mock('./fs/mountFs', () => ({
+vi.mock("./fs/mountFs", () => ({
   fsAvailable: () => fs.available,
   readFileText: (p: string) =>
-    fs.files.has(p) ? Promise.resolve(fs.files.get(p)!) : Promise.reject(new Error('ENOENT')),
+    fs.files.has(p)
+      ? Promise.resolve(fs.files.get(p)!)
+      : Promise.reject(new Error("ENOENT")),
   writeFileText: (p: string, t: string) => {
     fs.files.set(p, t);
     return Promise.resolve();
@@ -44,7 +69,7 @@ vi.mock('./fs/mountFs', () => ({
   exists: (p: string) => Promise.resolve(fs.files.has(p)),
 }));
 
-import App from './App';
+import App from "./App";
 
 beforeEach(() => {
   editorContext.activeFile = null;
@@ -54,12 +79,14 @@ beforeEach(() => {
   fs.files.clear();
 });
 
-describe('App readiness states', () => {
+describe("App readiness states", () => {
   it('shows "awaiting port" when the working tree has not attached', () => {
     fs.available = false;
-    editorContext.activeFile = '/src/App.tsx';
+    editorContext.activeFile = "/src/App.tsx";
     render(<App />);
-    expect(screen.getByText(/connecting to the working tree/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/connecting to the working tree/i),
+    ).toBeInTheDocument();
   });
 
   it('shows "no file open" when the port is up but nothing is focused', () => {
@@ -69,13 +96,13 @@ describe('App readiness states', () => {
     expect(screen.getByText(/no file open/i)).toBeInTheDocument();
   });
 
-  it('does not render a tab strip for the open files', () => {
+  it("does not render a tab strip for the open files", () => {
     fs.available = true;
-    editorContext.openFiles = ['/src/App.tsx', '/src/main.tsx'];
-    editorContext.activeFile = '/src/App.tsx';
-    fs.files.set('/app/src/App.tsx', 'export default 1;');
+    editorContext.openFiles = ["/src/App.tsx", "/src/main.tsx"];
+    editorContext.activeFile = "/src/App.tsx";
+    fs.files.set("/app/src/App.tsx", "export default 1;");
     render(<App />);
-    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
-    expect(screen.queryByText('main.tsx')).not.toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.queryByText("main.tsx")).not.toBeInTheDocument();
   });
 });

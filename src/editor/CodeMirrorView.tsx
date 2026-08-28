@@ -5,15 +5,19 @@
 // survives prop churn. Every keystroke updates the in-iframe state at 0 hops and
 // reports the new text up via `onChange`; persistence is debounced upstream.
 
-import { useEffect, useRef } from 'react';
-import { EditorState, Compartment, type Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
-import { setDiagnostics, type Diagnostic } from '@codemirror/lint';
-import { baseExtensions } from './codemirrorSetup';
-import { languageExtension } from './language';
-import { editorTheme } from './theme';
-import { toCodeMirrorMarks, type SourceError } from '../core/diagnostics';
-import type { HostTheme } from '@immediately-run/sdk';
+import { useEffect, useRef } from "react";
+import { EditorState, Compartment, type Extension } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import { setDiagnostics, type Diagnostic } from "@codemirror/lint";
+import { baseExtensions } from "./codemirrorSetup";
+import { languageExtension } from "./language";
+import { editorTheme } from "./theme";
+import { toCodeMirrorMarks, type SourceError } from "../core/diagnostics";
+import type { HostTheme } from "@immediately-run/sdk";
+
+/** Path comparison that survives the leading-slash difference between the host's
+ *  normalized form (`/src/App.tsx`) and a caller's repo-relative one. */
+const normalize = (p: string): string => (p.startsWith("/") ? p : `/${p}`);
 
 export interface CodeMirrorViewProps {
   /** Repo-relative path of the file being edited (drives language + diagnostics). */
@@ -27,10 +31,31 @@ export interface CodeMirrorViewProps {
   /** Build errors for the active file (already filtered upstream is fine; this
    *  filters again by path defensively). */
   errors: SourceError[];
+  /** R3-388 — a one-shot request to put the caret somewhere in this document, or
+   *  `null`. Applied once per `nonce`: two clicks on the SAME diagnostic must move
+   *  the caret twice, and every value between here and the host is de-duped, so the
+   *  nonce is the only thing that makes a repeat distinguishable. `line`/`column` are
+   *  1-indexed and are what the CALLER asked for — clamping to this document happens
+   *  here, which is why the host never has to resolve (and therefore never reveals)
+   *  how long the file is. */
+  selection: {
+    path: string;
+    line: number;
+    column?: number;
+    nonce: number;
+  } | null;
   onChange: (next: string) => void;
 }
 
-export function CodeMirrorView({ path, doc, readOnly, theme, errors, onChange }: CodeMirrorViewProps) {
+export function CodeMirrorView({
+  path,
+  doc,
+  readOnly,
+  theme,
+  errors,
+  selection,
+  onChange,
+}: CodeMirrorViewProps) {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -84,16 +109,58 @@ export function CodeMirrorView({ path, doc, readOnly, theme, errors, onChange }:
 
   // Reconfigure language when the active file (hence its type) changes.
   useEffect(() => {
-    view.current?.dispatch({ effects: langC.current.reconfigure(languageExtension(path)) });
+    view.current?.dispatch({
+      effects: langC.current.reconfigure(languageExtension(path)),
+    });
   }, [path]);
 
   useEffect(() => {
-    view.current?.dispatch({ effects: themeC.current.reconfigure(editorTheme(theme)) });
+    view.current?.dispatch({
+      effects: themeC.current.reconfigure(editorTheme(theme)),
+    });
   }, [theme]);
 
   useEffect(() => {
-    view.current?.dispatch({ effects: roC.current.reconfigure(readOnlyExtension(readOnly)) });
+    view.current?.dispatch({
+      effects: roC.current.reconfigure(readOnlyExtension(readOnly)),
+    });
   }, [readOnly]);
+
+  // R3-388 — apply a one-shot caret request.
+  //
+  // `[doc]` is in the deps, not just `[selection]`, and that is the load-bearing part:
+  // the host announces the target immediately after switching the active file, so the
+  // request routinely arrives BEFORE this view has the new document. Reacting only to
+  // the selection would land the caret in the outgoing file, or nowhere. Re-running on
+  // `doc` lets the same nonce apply once the right text is in the view.
+  const lastAppliedNonce = useRef<number | null>(null);
+  useEffect(() => {
+    const v = view.current;
+    if (!v || !selection) return;
+    if (lastAppliedNonce.current === selection.nonce) return;
+    // The target is for a specific file; ignore it until this view is showing that
+    // file, rather than moving the caret in whatever happens to be open.
+    if (normalize(selection.path) !== normalize(path)) return;
+    // Clamp, don't fail: a diagnostic outlives the edit that shortened its file, and
+    // landing on the last line beats not navigating at all.
+    const lineNo = Math.min(
+      Math.max(1, Math.floor(selection.line)),
+      v.state.doc.lines,
+    );
+    const line = v.state.doc.line(lineNo);
+    const col = selection.column ? Math.floor(selection.column) : 1;
+    const pos = Math.min(line.from + Math.max(0, col - 1), line.to);
+    lastAppliedNonce.current = selection.nonce;
+    v.dispatch({
+      selection: { anchor: pos },
+      // Centred rather than `"nearest"`: the caller is sending someone to a problem
+      // they have not seen, so context above and below it is the point. A reveal that
+      // parks the line at the very bottom of the viewport reads as having missed.
+      effects: EditorView.scrollIntoView(pos, { y: "center" }),
+    });
+    // Focus is NOT taken. The caller is a panel the user is driving with the keyboard;
+    // stealing focus here would break arrow-key traversal of the problems list.
+  }, [selection, doc, path]);
 
   // Push diagnostics into CodeMirror's lint state.
   useEffect(() => {
