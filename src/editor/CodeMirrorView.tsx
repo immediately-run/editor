@@ -125,9 +125,7 @@ export function CodeMirrorView({
     view.current?.dispatch({
       effects: themeC.current.reconfigure(editorTheme(theme)),
     });
-    // R3-653 fault injection (reverted by the next commit): `theme` dropped from the
-    // dependency array, which is a react-hooks/exhaustive-deps WARNING in this repo.
-  }, []);
+  }, [theme]);
 
   useEffect(() => {
     view.current?.dispatch({
