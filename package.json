@@ -10,7 +10,7 @@
     "dev": "vite",
     "dev:harness": "vite --config vite.harness.config.ts",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
