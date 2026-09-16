@@ -26,11 +26,10 @@ in the `docs` repo are the source of truth.
 
 - `npm run dev` — local Vite dev (the working-tree port is absent → "awaiting port").
 - `npm test` — vitest (the suite that must stay green).
-- `npm run lint -- --max-warnings 0` / `npm run build` — match the CI gate. The flag is
-  the gate: ESLint reads no `CI` variable, and three rules here are warn-level
-  (`react-hooks/exhaustive-deps` among them), so a bare `npm run lint` exits 0 on a
-  violation that CI now rejects. This line used to say "warnings are errors under CI",
-  which was true of neither the lint run nor the workflow — R3-653.
+- `npm run lint` / `npm run build` — the same strings CI runs. `lint` carries
+  `--max-warnings 0`, because three rules here are warn-level
+  (`react-hooks/exhaustive-deps` among them) and ESLint reads no `CI` variable. This line
+  used to say "warnings are errors under CI", which was true of neither side — R3-653.
 
 ## Reusing across repos
 
