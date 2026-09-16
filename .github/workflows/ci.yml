@@ -45,8 +45,12 @@ jobs:
           node-version: 22
           cache: npm
 
+      # `npm ci`, not `npm install`: the lockfile is committed, and `npm install` may
+      # resolve versions the lockfile does not name and rewrite it in place — so the gate
+      # would be testing a tree no contributor has. Every sibling app repo's ci.yml uses
+      # `npm ci`; this one was the outlier.
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       # `--max-warnings 0`, because a warning here is a defect that merges otherwise.
       #
