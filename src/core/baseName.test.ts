@@ -3,8 +3,8 @@ import { baseName } from './baseName';
 
 describe('baseName', () => {
   it('returns the last non-empty segment', () => {
-    expect(baseName('/a/b/logo.png')).toBe('logo.png');
-    expect(baseName('logo.png')).toBe('logo.png');
+    expect(baseName('/a/b/notes.txt')).toBe('notes.txt');
+    expect(baseName('notes.txt')).toBe('notes.txt');
   });
 
   it('falls back to the input when there is no non-empty segment', () => {

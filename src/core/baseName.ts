@@ -3,7 +3,7 @@
 // trailing slash or an all-separator path falls back to the input itself, so
 // the caller always has something to show.
 
-/** The last non-empty path segment — `'/a/b/logo.png'` → `'logo.png'`. */
+/** The last non-empty path segment — `'/a/b/notes.txt'` → `'notes.txt'`. */
 export function baseName(p: string): string {
   return p.split('/').filter(Boolean).pop() || p;
 }
