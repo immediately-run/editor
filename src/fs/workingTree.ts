@@ -9,7 +9,7 @@
 // `getAppMountPath()` (the repo's own mount, dual-mounted at `/app`).
 
 import { getMounts, getAppMountPath, type SandboxMount } from '@immediately-run/sdk';
-import { readFileText, writeFileText, exists, fsAvailable } from './mountFs';
+import { readFileText, readFileBytes, writeFileText, exists, fsAvailable } from './mountFs';
 
 /** Join a mount root with a repo-relative path, collapsing the slash seam. */
 export function joinMount(root: string, repoRelative: string): string {
@@ -70,6 +70,11 @@ export class WorkingTree {
 
   read(repoRelative: string): Promise<string> {
     return readFileText(this.abs(repoRelative));
+  }
+
+  /** Raw bytes, for the image preview (R3-804) — never decoded as text. */
+  readBytes(repoRelative: string): Promise<Uint8Array<ArrayBuffer>> {
+    return readFileBytes(this.abs(repoRelative));
   }
 
   write(repoRelative: string, text: string): Promise<void> {

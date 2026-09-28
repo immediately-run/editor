@@ -11,11 +11,13 @@ import {
   useFormFactor,
 } from "@immediately-run/sdk";
 import { useFileBuffer } from "./hooks/useFileBuffer";
+import { useImagePreview } from "./hooks/useImagePreview";
 import { useBuildErrors } from "./hooks/useBuildErrors";
 import { useCaretRequest } from "./hooks/useCaretRequest";
 import { resolvePhase } from "./core/readiness";
 import { CodeMirrorView } from "./editor/CodeMirrorView";
 import { ConflictBar } from "./chrome/ConflictBar";
+import { ImageOverlay } from "./chrome/ImageOverlay";
 import { Placeholder } from "./chrome/Placeholder";
 import { isRewrittenPath } from "./core/rewrittenPaths";
 import "./index.css";
@@ -42,6 +44,17 @@ export default function App() {
 
   const phase = resolvePhase({ portReady, activeFile });
 
+  // R3-804 — a recognised image takes the pane as an overlay over the LIVE
+  // CodeMirror view: useFileBuffer keeps the previous text buffer (its bytes
+  // never enter the text path), CodeMirrorView stays mounted underneath, and
+  // the text→image→text round trip costs no editor teardown.
+  const image = useImagePreview(activeFile, portReady);
+  // The path check matters on the switch frame: the hook's state flips in a
+  // passive effect, so without it the just-left image could paint over the
+  // newly selected file for one frame.
+  const imageActive =
+    phase === "ready" && image.state !== "idle" && image.path === activeFile;
+
   // A file Sandpack rewrites on every mount (e.g. package.json) is read-only — a
   // user edit would be accepted then silently discarded (native CP-3 parity). So
   // is a non-writable mount (an `ro` view / anonymous viewer).
@@ -58,7 +71,7 @@ export default function App() {
       data-form-factor={formFactor.class}
       data-orientation={formFactor.orientation}
     >
-      {conflict && buffer && (
+      {!imageActive && conflict && buffer && (
         <ConflictBar
           path={buffer.path}
           mine={buffer.buffer}
@@ -68,14 +81,14 @@ export default function App() {
         />
       )}
 
-      {readOnly && phase === "ready" && !buffer?.vanished && (
+      {!imageActive && readOnly && phase === "ready" && !buffer?.vanished && (
         <div className="ed-readonly-note" role="note">
           {writable
             ? "Read-only — this file is regenerated on each run."
             : "Read-only."}
         </div>
       )}
-      {saveError && (
+      {!imageActive && saveError && (
         <div className="ed-save-error" role="alert">
           Save failed: {saveError}
         </div>
@@ -84,23 +97,30 @@ export default function App() {
       <div className="ed-body">
         {phase === "awaiting-port" && <Placeholder kind="awaiting-port" />}
         {phase === "no-active-file" && <Placeholder kind="no-active-file" />}
-        {phase === "ready" && buffer?.vanished && (
+        {!imageActive && phase === "ready" && buffer?.vanished && (
           <Placeholder kind="vanished" detail={buffer.path} />
         )}
-        {phase === "ready" && !buffer && loadError && (
+        {!imageActive && phase === "ready" && !buffer && loadError && (
           <Placeholder kind="error" detail={loadError} />
         )}
         {phase === "ready" && buffer && !buffer.vanished && (
-          <CodeMirrorView
-            path={buffer.path}
-            doc={buffer.buffer}
-            readOnly={readOnly}
-            theme={theme}
-            errors={errors}
-            selection={caret}
-            onChange={setText}
-          />
+          // While an image covers the pane the editor underneath is hidden
+          // from pointer, keyboard and the accessibility tree (WCAG 2.1.1 /
+          // 2.4.3) — and stays MOUNTED, so switching back is a reconfigure,
+          // not a rebuild.
+          <div className="ed-cm-wrap" inert={imageActive} aria-hidden={imageActive}>
+            <CodeMirrorView
+              path={buffer.path}
+              doc={buffer.buffer}
+              readOnly={readOnly}
+              theme={theme}
+              errors={errors}
+              selection={caret}
+              onChange={setText}
+            />
+          </div>
         )}
+        {imageActive && <ImageOverlay preview={image} />}
       </div>
     </div>
   );

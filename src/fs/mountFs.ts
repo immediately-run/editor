@@ -32,6 +32,17 @@ export async function readFileText(absPath: string): Promise<string> {
   return decoder.decode(data instanceof Uint8Array ? data : new Uint8Array(data));
 }
 
+/** Read a working-tree file as raw bytes (R3-804 — the image path never goes
+ *  through the UTF-8 decoder). Throws if the fs is unavailable or the read fails.
+ *  The ArrayBuffer-backed type is what `new Blob([bytes])` accepts. */
+export async function readFileBytes(absPath: string): Promise<Uint8Array<ArrayBuffer>> {
+  const data = await port().readFile(absPath);
+  if (typeof data === 'string') return encoder.encode(data);
+  // A fresh ArrayBuffer-backed copy: the fs may hand back a view over a
+  // SharedArrayBuffer, which `new Blob(...)` (and our return type) refuse.
+  return new Uint8Array(data instanceof Uint8Array ? data : new Uint8Array(data));
+}
+
 /** Write UTF-8 `text` to a working-tree file over the rw port. The host's ZenFS watch
  *  observes the write and recompiles immediately (the editor is origin-excluded from the
  *  resulting fs-change fan-out — Phase 01). Throws on an unavailable fs or a rejected

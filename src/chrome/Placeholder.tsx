@@ -8,6 +8,11 @@ export type PlaceholderKind = 'awaiting-port' | 'no-active-file' | 'vanished' | 
 export interface PlaceholderProps {
   kind: PlaceholderKind;
   detail?: string;
+  /** Override the kind's copy when the same ANATOMY serves a neighbouring state
+   *  (R3-804's image loading/vanished states) — never fork the markup. An empty
+   *  hint suppresses the hint line. */
+  title?: string;
+  hint?: string;
 }
 
 const COPY: Record<PlaceholderKind, { title: string; hint: string; icon: typeof FileQuestion }> = {
@@ -33,13 +38,15 @@ const COPY: Record<PlaceholderKind, { title: string; hint: string; icon: typeof 
   },
 };
 
-export function Placeholder({ kind, detail }: PlaceholderProps) {
-  const { title, hint, icon: Icon } = COPY[kind];
+export function Placeholder({ kind, detail, title, hint }: PlaceholderProps) {
+  const copy = COPY[kind];
+  const Icon = copy.icon;
+  const hintText = hint ?? copy.hint;
   return (
     <div className="placeholder" data-kind={kind}>
       <Icon size={28} className={kind === 'awaiting-port' ? 'spin' : undefined} />
-      <div className="placeholder-title">{title}</div>
-      <div className="placeholder-hint">{hint}</div>
+      <div className="placeholder-title">{title ?? copy.title}</div>
+      {hintText && <div className="placeholder-hint">{hintText}</div>}
       {detail && <div className="placeholder-detail">{detail}</div>}
     </div>
   );
