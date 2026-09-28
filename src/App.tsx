@@ -49,7 +49,11 @@ export default function App() {
   // never enter the text path), CodeMirrorView stays mounted underneath, and
   // the text→image→text round trip costs no editor teardown.
   const image = useImagePreview(activeFile, portReady);
-  const imageActive = phase === "ready" && image.state !== "idle";
+  // The path check matters on the switch frame: the hook's state flips in a
+  // passive effect, so without it the just-left image could paint over the
+  // newly selected file for one frame.
+  const imageActive =
+    phase === "ready" && image.state !== "idle" && image.path === activeFile;
 
   // A file Sandpack rewrites on every mount (e.g. package.json) is read-only — a
   // user edit would be accepted then silently discarded (native CP-3 parity). So

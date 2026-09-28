@@ -4,9 +4,9 @@
 // them read-only and refuses input up front. Pure + tested so the policy is one
 // auditable list, not scattered string checks.
 
-const REWRITTEN_BASENAMES = new Set(['package.json']);
+import { baseName } from './baseName';
 
-const baseName = (p: string) => p.split('/').filter(Boolean).pop() || p;
+const REWRITTEN_BASENAMES = new Set(['package.json']);
 
 /** True ⟺ the working tree regenerates this path on mount (render it read-only). */
 export function isRewrittenPath(repoRelative: string): boolean {

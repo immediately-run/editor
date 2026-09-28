@@ -6,30 +6,28 @@
 // is `inert`/`aria-hidden` upstream (App.tsx), so keyboard and screen-reader
 // users cannot land in a hidden document (WCAG 2.1.1 / 2.4.3).
 //
-// States: a named busy state while the bytes load (R-IX-2 / WCAG 4.1.3), the
-// image with a caption once ready, and honest error / vanished (§12.4) states
-// — a failed read names the path (R3), and the settle is announced through a
-// live region, not only painted (R-IX-7).
+// Every state rides `Placeholder`'s anatomy (one spelling, R6) inside a live
+// region: loading and ready announce through `role="status"`, a failed read
+// through `role="alert"` (matching App's save-error surface) — the settle is
+// announced, not only painted (R-IX-7 / WCAG 4.1.3) — and a failure always
+// names the path (R3).
 
 import { useState } from 'react';
-import { FileX2, Loader2 } from 'lucide-react';
 import type { ImagePreview } from '../hooks/useImagePreview';
+import { baseName } from '../core/baseName';
 import { Placeholder } from './Placeholder';
-
-const fileName = (path: string): string => path.split('/').pop() ?? path;
 
 export function ImageOverlay({ preview }: { preview: ImagePreview }) {
   if (preview.state === 'loading') {
     return (
-      <div className="ed-image-overlay placeholder" role="status">
-        <Loader2 size={28} className="spin" />
-        <div className="placeholder-title">Loading {fileName(preview.path)}…</div>
+      <div className="ed-image-overlay" role="status">
+        <Placeholder kind="awaiting-port" title={`Loading ${baseName(preview.path)}…`} hint="" />
       </div>
     );
   }
   if (preview.state === 'error') {
     return (
-      <div className="ed-image-overlay">
+      <div className="ed-image-overlay" role="alert">
         <Placeholder
           kind="error"
           detail={`${preview.path} — ${preview.message}`}
@@ -39,13 +37,12 @@ export function ImageOverlay({ preview }: { preview: ImagePreview }) {
   }
   if (preview.state === 'vanished') {
     return (
-      <div className="ed-image-overlay placeholder" data-kind="vanished">
-        <FileX2 size={28} />
-        <div className="placeholder-title">This file was removed</div>
-        <div className="placeholder-hint">
-          The image was deleted or renamed elsewhere.
-        </div>
-        <div className="placeholder-detail">{preview.path}</div>
+      <div className="ed-image-overlay" role="status">
+        <Placeholder
+          kind="vanished"
+          hint="The image was deleted or renamed elsewhere."
+          detail={preview.path}
+        />
       </div>
     );
   }
@@ -58,7 +55,7 @@ export function ImageOverlay({ preview }: { preview: ImagePreview }) {
 
 function ReadyImage({ path, url }: { path: string; url: string }) {
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
-  const name = fileName(path);
+  const name = baseName(path);
   return (
     <div className="ed-image-overlay">
       <img

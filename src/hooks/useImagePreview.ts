@@ -26,7 +26,7 @@ export type ImagePreview =
    *  path owns the pane. */
   | { state: 'idle' }
   | { state: 'loading'; path: string }
-  | { state: 'ready'; path: string; url: string; mime: string }
+  | { state: 'ready'; path: string; url: string }
   /** The read failed but the file still exists. */
   | { state: 'error'; path: string; message: string }
   /** The image was deleted/renamed out from under the preview (§12.4). */
@@ -55,24 +55,28 @@ export function useImagePreview(
       .then((bytes) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
-        setPreview({ state: 'ready', path: activeFile, url: objectUrl, mime });
+        setPreview({ state: 'ready', path: activeFile, url: objectUrl });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
+        const message = e instanceof Error ? e.message : String(e);
         // Distinguish a vanished file from a transient unreadable fs (§12.4).
+        // The exists probe itself can reject (the fs torn down mid-failure —
+        // R17: every promise names its rejection sink): fall back to the honest
+        // error state; only a definitive "gone" is vanished.
         void tree
           .exists(activeFile)
           .then((present) => {
             if (cancelled) return;
             setPreview(
               present
-                ? {
-                    state: 'error',
-                    path: activeFile,
-                    message: e instanceof Error ? e.message : String(e),
-                  }
+                ? { state: 'error', path: activeFile, message }
                 : { state: 'vanished', path: activeFile },
             );
+          })
+          .catch(() => {
+            if (cancelled) return;
+            setPreview({ state: 'error', path: activeFile, message });
           });
       });
     return () => {

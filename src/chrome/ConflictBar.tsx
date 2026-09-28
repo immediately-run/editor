@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { AlertTriangle, Check, Download, GitCompare } from 'lucide-react';
+import { baseName } from '../core/baseName';
 
 export interface ConflictBarProps {
   path: string;
@@ -17,8 +18,6 @@ export interface ConflictBarProps {
   onKeepMine: () => void;
   onTakeTheirs: () => void;
 }
-
-const baseName = (p: string) => p.split('/').filter(Boolean).pop() || p;
 
 export function ConflictBar({ path, mine, theirs, onKeepMine, onTakeTheirs }: ConflictBarProps) {
   const [showDiff, setShowDiff] = useState(false);

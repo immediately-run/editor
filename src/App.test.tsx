@@ -4,7 +4,7 @@
 // (buffer / readiness / diagnostics / debounce).
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 
 // --- SDK mock ---------------------------------------------------------------
 const editorContext = {
@@ -60,9 +60,18 @@ vi.mock("@immediately-run/sdk", () => ({
   getAppMountPath: () => "/app",
   setActiveFile: vi.fn(() => Promise.resolve()),
   closeFile: vi.fn(() => Promise.resolve()),
-  // The fs-change subscription returns an unsubscribe; no events in these tests.
-  onFsChange: vi.fn(() => () => {}),
+  // The fs-change subscription captures its listener; a test emits a batch by
+  // calling every captured listener (see the R3-804 re-read case).
+  onFsChange: vi.fn((listener: (c: { paths: string[]; epoch: number }) => void) => {
+    fsChangeListeners.add(listener);
+    return () => fsChangeListeners.delete(listener);
+  }),
 }));
+
+// Captured onFsChange listeners (the SDK mock above adds/removes here).
+const fsChangeListeners = new Set<
+  (c: { paths: string[]; epoch: number }) => void
+>();
 
 // --- working-tree port mock --------------------------------------------------
 const fs = {
@@ -100,6 +109,7 @@ beforeEach(() => {
   fs.files.clear();
   fs.bytes.clear();
   fs.textReads.length = 0;
+  fsChangeListeners.clear();
 });
 
 describe("R3-392 — readiness report gates caret delivery", () => {
@@ -222,5 +232,30 @@ describe("R3-804 — image overlay", () => {
     expect(
       screen.getByText(/deleted or renamed elsewhere/i),
     ).toBeInTheDocument();
+  });
+
+  it("re-reads and re-renders the shown image on an fs-change batch (R-IX-4)", async () => {
+    fs.available = true;
+    fs.bytes.set("/app/assets/logo.png", new Uint8Array([1]));
+    editorContext.activeFile = "/assets/logo.png";
+    render(<App />);
+    const img = await screen.findByRole("img", { name: "logo.png" });
+    const srcBefore = img.getAttribute("src");
+
+    // An external write to the shown image: the host's batch names its path.
+    fs.bytes.set("/app/assets/logo.png", new Uint8Array([2, 2]));
+    act(() => {
+      fsChangeListeners.forEach((l) =>
+        l({ paths: ["/assets/logo.png"], epoch: 1 }),
+      );
+    });
+
+    // The re-read builds a NEW object URL (the setup stub is counter-backed),
+    // so a swapped src proves the re-render; the old one was revoked.
+    await vi.waitFor(() => {
+      expect(
+        screen.getByRole("img", { name: "logo.png" }).getAttribute("src"),
+      ).not.toBe(srcBefore);
+    });
   });
 });
