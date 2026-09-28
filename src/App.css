@@ -20,6 +20,11 @@
 .cm-host {
   height: 100%;
 }
+/* R3-804 — the wrapper lets the image overlay inert/hide the still-mounted
+   editor without CodeMirror knowing anything about it. */
+.ed-cm-wrap {
+  height: 100%;
+}
 .cm-host .cm-editor {
   height: 100%;
   font-family: var(--mono);
@@ -149,6 +154,42 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ---- R3-804 image overlay ---- */
+/* Covers the still-mounted editor inside .ed-body (which is position:relative). */
+.ed-image-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  background: var(--bg);
+  overflow: auto;
+}
+.ed-image {
+  max-width: 100%;
+  /* Leave the caption line visible without scrolling. */
+  max-height: calc(100% - 34px);
+  object-fit: contain;
+}
+.ed-image-caption {
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+  word-break: break-all;
+}
+.ed-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* ---- Mobile (the carousel pane) ---- */

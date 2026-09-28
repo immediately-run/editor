@@ -12,7 +12,8 @@ in the `docs` repo are the source of truth.
 - **Pure core, tested.** All decision logic lives in `src/core/` as pure functions with
   unit tests — the conflict state machine (`buffer.ts`), readiness (`readiness.ts`),
   diagnostics mapping (`diagnostics.ts`), debounce (`debounce.ts`), language/rewritten
-  selectors. The React layer (`src/editor/`, `src/hooks/`, `src/chrome/`, `App.tsx`) is
+  selectors, the image-extension map (`imageFile.ts`, R3-804). The React layer
+  (`src/editor/`, `src/hooks/`, `src/chrome/`, `App.tsx`) is
   glue: keep logic out of it.
 - **Debounce the WRITE, not compilation.** The host recompiles on its ZenFS watch; do
   not add a compile debounce or match `recompileDelay`.

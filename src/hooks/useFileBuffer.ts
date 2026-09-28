@@ -42,11 +42,14 @@ import {
   type FileBuffer,
 } from '../core/buffer';
 import { debounce, type Debounced } from '../core/debounce';
+import { imageMimeForPath } from '../core/imageFile';
 import { WorkingTree, isWritable } from '../fs/workingTree';
 
 /** Compare two repo-relative paths tolerant of a leading-slash mismatch (the host
- *  pushes `/src/App.tsx`; the active file is also leading-slash, but be defensive). */
-const samePath = (a: string, b: string): boolean =>
+ *  pushes `/src/App.tsx`; the active file is also leading-slash, but be defensive).
+ *  Exported for `useImagePreview` (R3-804), which matches fs-change batches the
+ *  same way. */
+export const samePath = (a: string, b: string): boolean =>
   a.replace(/^\/+/, '') === b.replace(/^\/+/, '');
 
 export interface UseFileBuffer {
@@ -153,6 +156,15 @@ export function useFileBuffer(activeFile: string | null): UseFileBuffer {
     setSaveError(null);
     if (!activeFile) {
       setBuffer(null);
+      return;
+    }
+    if (imageMimeForPath(activeFile)) {
+      // R3-804 — an image never enters the text buffer: its bytes would decode
+      // to mojibake and CodeMirror would parse megabytes of garbage. KEEP the
+      // previous buffer (if any) so CodeMirrorView stays mounted under the
+      // image overlay — the text→image→text round trip costs no editor
+      // teardown. The stale buffer is inert: the fs-change effect below no-ops
+      // while `buffer.path !== activeFile`, and App suppresses its chrome.
       return;
     }
     let cancelled = false;
