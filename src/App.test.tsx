@@ -12,6 +12,8 @@ const editorContext = {
   openFiles: [] as string[],
   dirtyPaths: [] as string[],
 };
+// R3-827 — mutable so the light case can flip what useHostTheme returns.
+const hostTheme = { current: "dark" as "dark" | "light" };
 const mounts: unknown[] = [];
 
 // R3-388 — the subpath the caret listener rides. The REAL `sandboxUtils` cannot load
@@ -43,7 +45,7 @@ vi.mock("@immediately-run/sdk/ready", () => ({
 
 vi.mock("@immediately-run/sdk", () => ({
   useEditorContext: () => editorContext,
-  useHostTheme: () => "dark",
+  useHostTheme: () => hostTheme.current,
   useFormFactor: () => ({
     class: "desktop",
     orientation: "landscape",
@@ -102,6 +104,7 @@ vi.mock("./fs/mountFs", () => ({
 import App from "./App";
 
 beforeEach(() => {
+  hostTheme.current = "dark";
   editorContext.activeFile = null;
   editorContext.openFiles = [];
   editorContext.dirtyPaths = [];
@@ -110,6 +113,19 @@ beforeEach(() => {
   fs.bytes.clear();
   fs.textReads.length = 0;
   fsChangeListeners.clear();
+});
+
+describe("R3-827 — the host theme reaches the palette", () => {
+  it("sets data-theme='light' on .editor-app when the host polarity is light", () => {
+    hostTheme.current = "light";
+    const { container } = render(<App />);
+    expect(container.querySelector(".editor-app")).toHaveAttribute("data-theme", "light");
+  });
+
+  it("carries dark when the host polarity is dark", () => {
+    const { container } = render(<App />);
+    expect(container.querySelector(".editor-app")).toHaveAttribute("data-theme", "dark");
+  });
 });
 
 describe("R3-392 — readiness report gates caret delivery", () => {
