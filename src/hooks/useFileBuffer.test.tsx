@@ -162,7 +162,7 @@ describe("useFileBuffer — the re-read validity rule (R3-1163)", () => {
 
   it("the torn variant: the read resolves with B's bytes cut to A's length — still void, no conflict", async () => {
     const h = await openFile("A0");
-    act(() => h.result.current.setText("AA11"));
+    act(() => h.result.current.setText("AA1"));
     await flushDebounce();
     const writeA = port.pendingWrites[0];
     act(() => h.result.current.setText("AA22"));
@@ -173,8 +173,9 @@ describe("useFileBuffer — the re-read validity rule (R3-1163)", () => {
     await settle();
     act(() => h.result.current.setText("AA22"));
     await flushDebounce();
-    // The read resolves with B's bytes cut to A's length (a torn mid-write read).
-    port.resolveRead(0, "AA22".slice(0, "AA11".length));
+    // The read resolves with B's bytes cut to A's length (a torn mid-write read:
+    // genuinely a strict prefix of B, and equal to neither the baseline nor B).
+    port.resolveRead(0, "AA22".slice(0, "AA1".length));
     await settle();
     port.resolveWrite(1);
     await settle();
@@ -182,6 +183,34 @@ describe("useFileBuffer — the re-read validity rule (R3-1163)", () => {
 
     expect(h.result.current.buffer?.conflict).toBeNull();
     expect(port.files.get(wtPath(FILE))).toBe("AA22");
+  });
+
+  it("a write issued AND settled while the read is out voids it — the immediate re-run recovers, and a foreign read raises the conflict", async () => {
+    const h = await openFile("A0");
+    act(() => h.result.current.setText("A1"));
+    await flushDebounce();
+    port.resolveWrite(0); // A settles before any announcement: inFlight back to 0
+    await settle();
+    // The echo starts a read with no write open (seqAtStart = 1)...
+    emitFsChange([FILE], 5);
+    await settle();
+    // ...keystroke 2's debounce issues write B mid-read AND it settles before
+    // the read resolves: seqNow = 2, openWrites = 0 — the immediate re-run arm.
+    act(() => h.result.current.setText("A2"));
+    await flushDebounce();
+    port.resolveWrite(0); // B is index 0 once A's entry is resolved away
+    await settle();
+    port.resolveRead(0, "A1"); // the pre-B bytes
+    await settle();
+    // The void's immediate re-run has a SECOND read pending...
+    expect(port.pendingReads.length).toBe(1);
+    // The user types once more (dirty, debounce not yet fired), and the foreign
+    // answer arrives through the re-run: §6 raises the blocking conflict.
+    act(() => h.result.current.setText("A3"));
+    port.resolveRead(0, "THEIRS");
+    await settle();
+    await settle();
+    expect(h.result.current.buffer?.conflict).toEqual({ theirs: "THEIRS" });
   });
 
   it("a foreign write to a dirty buffer with none of our writes open or issued raises the conflict, and the warn line says why without the text", async () => {
@@ -231,6 +260,7 @@ describe("useFileBuffer — the re-read validity rule (R3-1163)", () => {
     await settle();
     await settle();
 
+    console.log('[dbg2] buffer:', JSON.stringify(h.result.current.buffer), 'warns:', JSON.stringify(warnSpy.mock.calls.map((c) => String(c[0]).slice(0, 60))));
     expect(h.result.current.buffer?.conflict).toEqual({ theirs: "THEIRS" });
   });
 

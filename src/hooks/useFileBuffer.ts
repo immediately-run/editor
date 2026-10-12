@@ -30,6 +30,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMounts, onFsChange } from '@immediately-run/sdk';
 import {
+  isDirty,
   openBuffer,
   applyEdit,
   applyExternalChange,
@@ -49,9 +50,9 @@ import { WorkingTree, isWritable } from '../fs/workingTree';
 /** Compare two repo-relative paths tolerant of a leading-slash mismatch (the host
  *  pushes `/src/App.tsx`; the active file is also leading-slash, but be defensive).
  *  Exported for `useImagePreview` (R3-804), which matches fs-change batches the
- *  same way. */
-export const samePath = (a: string, b: string): boolean =>
-  a.replace(/^\/+/, '') === b.replace(/^\/+/, '');
+ *  same way. One home: `core/samePath.ts` (R6) — re-exported here unchanged. */
+export { samePath } from '../core/samePath';
+import { samePath } from '../core/samePath';
 
 export interface UseFileBuffer {
   buffer: FileBuffer | null;
@@ -83,10 +84,10 @@ export function useFileBuffer(activeFile: string | null): UseFileBuffer {
   /** The exact bytes of our most recent write, and where they went. An fs-change
    *  whose disk content equals this is our own echo, whatever the buffer now holds. */
   const lastWriteRef = useRef<{ path: string; text: string } | null>(null);
-  const writeSeqRef = useRef(0);
   /** Monotonic counter bumped every time a write is issued. A re-read captures it
    *  before its await; if the counter moved by resolution, a write of ours was
    *  issued mid-read and the read's bytes say nothing usable (R3-1163). */
+  const writeSeqRef = useRef(0);
   /** Writes we have issued and not yet seen settle, per path. While one is open,
    *  re-reading the path is pointless at best: the announcement can only be our
    *  own, and a read racing an in-flight write is not guaranteed to be whole. */
@@ -262,7 +263,7 @@ export function useFileBuffer(activeFile: string | null): UseFileBuffer {
         // the next conflict report needs no reproduction. Lengths and flags only,
         // never the text: file contents are the user's.
         const lw = lastWriteRef.current;
-        if (now.buffer !== now.baseline) {
+        if (isDirty(now)) {
           console.warn(
             `[useFileBuffer] re-read judged external for ${activeFile}: ` +
               `disk=${disk.length}B baseline=${now.baseline.length}B lastWrite=${(lw?.text ?? '').length}B ` +

@@ -16,6 +16,8 @@
  *  - `external` — anything else: a foreign writer, judged against the buffer's
  *    dirty state by the caller. */
 
+import { samePath } from './samePath';
+
 export type RereadVerdict = 'void' | 'unchanged' | 'own-echo' | 'external';
 
 export interface RereadInput {
@@ -34,11 +36,6 @@ export interface RereadInput {
   /** The write sequence number now (at resolution). */
   seqNow: number;
 }
-
-/** Leading-slash-tolerant path equality — the host pushes `/src/App.tsx` while a
- *  caller may hold `src/App.tsx` (same tolerance as the hook's `samePath`). */
-const samePath = (a: string, b: string): boolean =>
-  a.replace(/^\/+/, '') === b.replace(/^\/+/, '');
 
 export function judgeReread(opts: RereadInput): RereadVerdict {
   if (opts.openWrites > 0 || opts.seqAtStart !== opts.seqNow) return 'void';

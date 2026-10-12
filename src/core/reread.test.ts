@@ -44,8 +44,7 @@ describe("judgeReread (R3-1163 — the re-read validity rule)", () => {
     expect(judgeReread({ ...base, lastWrite: null })).toBe("external");
   });
 
-  it("the verdict order: void precedes unchanged and own-echo", () => {
-    // disk equals BOTH the baseline and the last write; the moved sequence wins.
+  it("the verdict order: void precedes unchanged (disk = baseline here; the void-beats-own-echo twin is the test above)", () => {
     expect(
       judgeReread({ ...base, disk: base.baseline, seqAtStart: 1, seqNow: 2 }),
     ).toBe("void");
