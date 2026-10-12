@@ -43,6 +43,7 @@ import {
 } from '../core/buffer';
 import { debounce, type Debounced } from '../core/debounce';
 import { imageMimeForPath } from '../core/imageFile';
+import { judgeReread } from '../core/reread';
 import { WorkingTree, isWritable } from '../fs/workingTree';
 
 /** Compare two repo-relative paths tolerant of a leading-slash mismatch (the host
@@ -82,6 +83,10 @@ export function useFileBuffer(activeFile: string | null): UseFileBuffer {
   /** The exact bytes of our most recent write, and where they went. An fs-change
    *  whose disk content equals this is our own echo, whatever the buffer now holds. */
   const lastWriteRef = useRef<{ path: string; text: string } | null>(null);
+  const writeSeqRef = useRef(0);
+  /** Monotonic counter bumped every time a write is issued. A re-read captures it
+   *  before its await; if the counter moved by resolution, a write of ours was
+   *  issued mid-read and the read's bytes say nothing usable (R3-1163). */
   /** Writes we have issued and not yet seen settle, per path. While one is open,
    *  re-reading the path is pointless at best: the announcement can only be our
    *  own, and a read racing an in-flight write is not guaranteed to be whole. */
@@ -122,6 +127,7 @@ export function useFileBuffer(activeFile: string | null): UseFileBuffer {
       // announcement can reach us before our own write promise resolves, and the
       // echo has to be recognisable as ours at that moment.
       lastWriteRef.current = { path, text };
+      writeSeqRef.current += 1;
       inFlightRef.current.set(path, (inFlightRef.current.get(path) ?? 0) + 1);
       tree
         .write(path, text)
@@ -215,6 +221,10 @@ export function useFileBuffer(activeFile: string | null): UseFileBuffer {
       }
       const tree = WorkingTree.current();
       const seq = ++readSeqRef.current;
+      // The write-sequence snapshot: a write issued while the read is out moves
+      // `writeSeqRef`, and the read's bytes then describe neither the baseline
+      // nor our newest write — the read is void, whatever it brought back.
+      const seqAtStart = writeSeqRef.current;
       try {
         const disk = await tree.read(activeFile);
         // A newer re-read overtook us: its bytes are the truth, ours are history.
@@ -222,13 +232,43 @@ export function useFileBuffer(activeFile: string | null): UseFileBuffer {
         // Re-read the LIVE buffer, not the pre-await snapshot: a write of ours may
         // have re-baselined it while this read was out.
         const now = bufferRef.current;
-        if (!now || now.path !== activeFile || disk === now.baseline) return;
-        const ours = lastWriteRef.current;
-        if (ours && samePath(ours.path, activeFile) && disk === ours.text) {
+        if (!now || now.path !== activeFile) return;
+        const verdict = judgeReread({
+          disk,
+          baseline: now.baseline,
+          lastWrite: lastWriteRef.current,
+          activePath: activeFile,
+          openWrites: inFlightRef.current.get(activeFile) ?? 0,
+          seqAtStart,
+          seqNow: writeSeqRef.current,
+        });
+        if (verdict === 'void') {
+          // A read that overlaps a write of ours says nothing. Reconcile once the
+          // write settles; with none open, the move was issued-then-settled during
+          // the await — re-run now. Each void is caused by one issued write, so
+          // the re-runs are bounded by the user's typing, never a spin.
+          if ((inFlightRef.current.get(activeFile) ?? 0) > 0) deferredRereadRef.current = true;
+          else rereadRef.current?.();
+          return;
+        }
+        if (verdict === 'unchanged') return;
+        if (verdict === 'own-echo') {
           // Exactly the bytes we last sent — our echo, never a foreign change,
           // even if the user has typed since.
           setBuffer(applyOwnWriteEcho(now, disk));
           return;
+        }
+        // external — say why the bytes were judged foreign, once per verdict, so
+        // the next conflict report needs no reproduction. Lengths and flags only,
+        // never the text: file contents are the user's.
+        const lw = lastWriteRef.current;
+        if (now.buffer !== now.baseline) {
+          console.warn(
+            `[useFileBuffer] re-read judged external for ${activeFile}: ` +
+              `disk=${disk.length}B baseline=${now.baseline.length}B lastWrite=${(lw?.text ?? '').length}B ` +
+              `diskPrefixOfLastWrite=${(lw?.text ?? '').startsWith(disk)} ` +
+              `writeSeq ${seqAtStart}→${writeSeqRef.current}`,
+          );
         }
         setBuffer(applyExternalChange(now, disk));
       } catch {
