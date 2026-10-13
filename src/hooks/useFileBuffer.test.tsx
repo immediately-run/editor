@@ -147,11 +147,15 @@ describe("useFileBuffer — the re-read validity rule (R3-1163)", () => {
     expect(port.writes.map((w) => w.text)).toEqual(["A1", "A2"]);
 
     // 5. The read resolves with A — a write of ours was issued mid-read, so the
-    //    verdict is void; B's settle drains the deferred re-read, whose bytes
-    //    are B's own echo. No conflict; B reached the port.
+    //    verdict is void; B's settle drains the deferred re-read (a second read
+    //    is pending — the defer arm is load-bearing), whose bytes are B's own
+    //    echo. No conflict; B reached the port.
     port.resolveRead(0, "A1");
     await settle();
     port.resolveWrite(1);
+    await settle();
+    expect(port.pendingReads.length).toBe(1);
+    port.resolveRead(0, "A2");
     await settle();
     await settle();
 
@@ -248,20 +252,56 @@ describe("useFileBuffer — the re-read validity rule (R3-1163)", () => {
     act(() => h.result.current.setText("mine"));
     await flushDebounce();
     // Our write is open (unresolved). A foreign write lands on disk and the
-    // announcement arrives while it is open: the pre-await defer holds it.
+    // announcement arrives while it is open: the pre-await defer holds it — no
+    // read starts until the write settles.
     emitFsChange([FILE], 3);
     await settle();
+    expect(port.pendingReads.length).toBe(0);
     // The user types WHILE the write is still open, so its settle skips markSaved
     // (the buffer never re-baselines — dirty continuously against A0) — the drain
     // re-read then sees the foreign bytes against that dirty buffer.
     act(() => h.result.current.setText("mine 2"));
     port.resolveWrite(0);
     await settle();
+    expect(port.pendingReads.length).toBe(1);
+    await settle();
     port.resolveRead(0, "THEIRS");
     await settle();
     await settle();
 
     expect(h.result.current.buffer?.conflict).toEqual({ theirs: "THEIRS" });
+  });
+
+  it("a re-read resolving to exactly the baseline against a dirty buffer folds nothing — no conflict, keystrokes survive", async () => {
+    // The unchanged arm: a foreign writer that restores the baseline bytes must
+    // not raise a conflict whose theirs is the editor's own saved bytes.
+    const h = await openFile("A0");
+    act(() => h.result.current.setText("mine"));
+    await settle();
+    emitFsChange([FILE], 6);
+    await settle();
+    port.resolveRead(0, "A0");
+    await settle();
+    await settle();
+
+    expect(h.result.current.buffer?.conflict).toBeNull();
+    expect(h.result.current.buffer?.buffer).toBe("mine");
+  });
+
+  it("an external adopt against a CLEAN buffer logs no 'judged external' line", async () => {
+    // The warn is reserved for external-vs-dirty (the case a conflict report
+    // follows); the clean silent adopt stays silent.
+    const h = await openFile("A0");
+    port.files.set(wtPath(FILE), "THEIRS");
+    emitFsChange([FILE], 7);
+    await settle();
+    port.resolveRead(0, "THEIRS");
+    await settle();
+    await settle();
+
+    expect(h.result.current.buffer?.baseline).toBe("THEIRS");
+    expect(h.result.current.buffer?.conflict).toBeNull();
+    expect(warnSpy.mock.calls.filter((c) => String(c[0]).includes("judged external"))).toHaveLength(0);
   });
 
   it("a clean buffer folding its own echo stays clean (no regression on the quiet path)", async () => {

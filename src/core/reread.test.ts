@@ -33,9 +33,12 @@ describe("judgeReread (R3-1163 — the re-read validity rule)", () => {
     expect(judgeReread({ ...base, disk: base.lastWrite.text, lastWrite: { path: "src/App.tsx", text: base.lastWrite.text } })).toBe("own-echo");
   });
 
-  it("a last write to a DIFFERENT path is not our echo — external", () => {
+  it("a last write to a DIFFERENT path is not our echo — external, even with equal bytes", () => {
+    // The samePath conjunct is load-bearing: without it, a foreign write to the
+    // active file whose bytes coincide with our last write to ANOTHER file would
+    // judge own-echo and re-baseline a dirty buffer onto foreign bytes.
     expect(
-      judgeReread({ ...base, lastWrite: { path: "/src/Other.tsx", text: base.lastWrite.text } }),
+      judgeReread({ ...base, disk: base.lastWrite.text, lastWrite: { path: "/src/Other.tsx", text: base.lastWrite.text } }),
     ).toBe("external");
   });
 
