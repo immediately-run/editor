@@ -251,8 +251,9 @@ describe("useFileBuffer — the re-read validity rule (R3-1163)", () => {
     // announcement arrives while it is open: the pre-await defer holds it.
     emitFsChange([FILE], 3);
     await settle();
-    // The user keeps typing after the save settles (buffer dirty again), then the
-    // write resolves; the drain re-reads and sees the foreign bytes.
+    // The user types WHILE the write is still open, so its settle skips markSaved
+    // (the buffer never re-baselines — dirty continuously against A0) — the drain
+    // re-read then sees the foreign bytes against that dirty buffer.
     act(() => h.result.current.setText("mine 2"));
     port.resolveWrite(0);
     await settle();
@@ -260,7 +261,6 @@ describe("useFileBuffer — the re-read validity rule (R3-1163)", () => {
     await settle();
     await settle();
 
-    console.log('[dbg2] buffer:', JSON.stringify(h.result.current.buffer), 'warns:', JSON.stringify(warnSpy.mock.calls.map((c) => String(c[0]).slice(0, 60))));
     expect(h.result.current.buffer?.conflict).toEqual({ theirs: "THEIRS" });
   });
 
